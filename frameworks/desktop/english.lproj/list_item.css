@@ -34,15 +34,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   -o-text-overflow: ellipsis;
-  -moz-binding: sc_static('ellipsis-xbl.xml');
-}
-
-.sc-list-item-view .sc-outline {
-  position: absolute;
-  left: 0;
-  top: 0;
-  right: 0;
-  bottom: 0;
+  -ms-text-overflow: ellipsis;
 }
 
 .sc-list-item-view .sc-outline {

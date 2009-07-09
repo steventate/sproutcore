@@ -27,6 +27,11 @@ SC.SelectFieldView = SC.FieldView.extend(
     An array of items that will form the menu you want to show.
   */ 
   objects: [],
+  
+  /**
+    Binding default for an array of objects
+  */ 
+  objectsBindingDefault: SC.Binding.multiple(),
 
   /**
     If you set this to a non-null value, then the name shown for each 
@@ -58,6 +63,11 @@ SC.SelectFieldView = SC.FieldView.extend(
     if true, the empty name will be localized.
   */
   localize: false,
+  
+  /**
+    if true, it means that the nameKey, valueKey or objects changed
+  */
+  cpDidChange: YES,
 
   /**
     override this to change the enabled/disabled state of menu items as they
@@ -95,13 +105,14 @@ SC.SelectFieldView = SC.FieldView.extend(
     call this method to rebuild the menu manually.  Normally you should not
     need to do this since the menu will be rebuilt as its data changes.
   */
-  rebuildMenu: function(context) {
+  rebuildMenu: function(context, firstTime) {
 
     // get list of objects.
     var nameKey = this.get('nameKey') ;
     var valueKey = this.get('valueKey') ;
     var objects = this.get('objects') ;
     var fieldValue = this.get('value') ;
+    var el, selectElement;
    
     // get the localization flag.
     var shouldLocalize = this.get('localize'); 
@@ -113,12 +124,26 @@ SC.SelectFieldView = SC.FieldView.extend(
     if (objects) {
       objects = this.sortObjects(objects) ; // sort'em.
       // var html = [] ;       
-   
+      if(!firstTime){
+        selectElement=this.$input()[0];
+        selectElement.innerHTML='';
+      }
+      
       var emptyName = this.get('emptyName') ;
       if (emptyName) {
         if (shouldLocalize) emptyName = emptyName.loc() ;
-        context.push('<option value="***">%@</option>'.fmt(emptyName)) ;
-        context.push('<option disabled="disabled"></option>') ;
+          if(firstTime){
+            context.push('<option value="***">%@</option>'.fmt(emptyName)) ;
+            context.push('<option disabled="disabled"></option>') ;
+          }else{
+            el=document.createElement('option');
+            el.value="***";
+            el.innerHTML=emptyName;
+            selectElement.appendChild(el);
+            el=document.createElement('option');
+            el.disabled="disabled";
+            selectElement.appendChild(el);
+          }
       }
    
       // generate option elements.
@@ -141,16 +166,27 @@ SC.SelectFieldView = SC.FieldView.extend(
    
           // render HTML
           var disable = (this.validateMenuItem && this.validateMenuItem(value, name)) ? '' : 'disabled="disabled" ' ;
-          context.push('<option %@value="%@">%@</option>'.fmt(disable,value,name)) ;
-   
+          if(firstTime){
+            context.push('<option %@value="%@">%@</option>'.fmt(disable,value,name)) ;
+          } else{
+            el=document.createElement('option');
+            el.value=value;
+            el.innerHTML=name;
+            if(disable.length>0) el.disable="disabled";
+            selectElement.appendChild(el);
+          }
         // null value means separator.
         } else {
-          context.push('<option disabled="disabled"></option>') ;
+          if(firstTime){
+            context.push('<option disabled="disabled"></option>') ;
+          }else{
+            el=document.createElement('option');
+            el.disabled="disabled";
+            selectElement.appendChild(el);
+          }
         }
       }, this );
    
-      // replace the contents of this HTML element.
-      // this.$input().html(context.join(""));//this.update(html.join("")); //TODO: this won't work
       this.setFieldValue(fieldValue);
    
     } else {
@@ -166,6 +202,7 @@ SC.SelectFieldView = SC.FieldView.extend(
    
   /* @private */
   mouseDown: function(evt) {
+    
     if (!this.get('isEnabled')) {
       evt.stop();
       return YES;
@@ -247,12 +284,14 @@ SC.SelectFieldView = SC.FieldView.extend(
           } // if (object &&...)
         } // while(--loc)
       } // if (this._objects)
-     this.rebuildMenu(context) ;
-    // } // if (this.didChangeFor...)
+     this.rebuildMenu(context, firstTime) ;
+     //} // if (this.didChangeFor...)
   },
 
-displayProperties: ['objects','nameKey','valueKey'],
+  displayProperties: ['objects','nameKey','valueKey'],
 
+  
+  
   // this is invoked anytime an item we are interested in in the menu changes
   // rebuild the menu when this happens, but only one time.
   _objectsItemObserver: function(item, key, value) {

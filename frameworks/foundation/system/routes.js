@@ -68,7 +68,7 @@ SC.routes = SC.Object.create(
       if (typeof(value) == "object") {
         
         // get the original route and any params
-        var parts = (value.route) ? value.route.split('&') : [''] ;
+        var parts = value.route ? value.route.split('&') : [''] ;
         var route = parts.shift() ;
         var params = {} ;
         parts.forEach(function(p) {
@@ -77,7 +77,7 @@ SC.routes = SC.Object.create(
         }) ;
         
         // overlay any params passed in the object.
-        for(var key in value) {
+        for(key in value) {
           if (!value.hasOwnProperty(key)) continue ;
           if (key != 'route') {
             params[key] = encodeURIComponent(''+value[key]) ;
@@ -86,7 +86,7 @@ SC.routes = SC.Object.create(
         
         // now build params.
         parts = [route] ;
-        for(var key in params) {
+        for(key in params) {
           if (!params.hasOwnProperty(key)) continue ;
           parts.push([key,params[key]].join('=')) ;          
         }
@@ -120,7 +120,7 @@ SC.routes = SC.Object.create(
     
     static/route/path -- matches this path only.
     static/route/:path -- matches any static/route, :path passed as param.
-    static/*route -- matches any static, route gets rest of URL.
+    static/ *route -- matches any static, route gets rest of URL.
     
     parameters can also be passed using &.
     static/route&param1=value&param2=value2
@@ -132,7 +132,7 @@ SC.routes = SC.Object.create(
   */
   add: function(route, target, method) {
     // normalize the target/method
-    if (SC.typeOf(target) === SC.T_FUNCTION) {
+    if (method===undefined && SC.typeOf(target) === SC.T_FUNCTION) {
       method = target; target = null ;
     } else if (SC.typeOf(method) === SC.T_STRING) {
       method = target[method] ;
@@ -150,13 +150,14 @@ SC.routes = SC.Object.create(
     @param {String} route
   */
   gotoRoute: function(route) {
-    var params = {} ; var parts, route, routeHandler, target, method ;
+    var params = {},
+        parts, routeHandler, target, method ;
     
     // save this route for window location sensing
     this._lastRoute = route ;
     
     // step 1: split out parameters
-    var parts = route.split('&') ;
+    parts = route.split('&') ;
     if (parts && parts.length > 0) {
       route = parts.shift() ;
       parts.forEach(function(part) {
@@ -192,6 +193,18 @@ SC.routes = SC.Object.create(
     this._didSetupHistory = false ;
   },
   
+  // use this method instead of invokeLater() to check windowLocation since
+  // we don't want to trigger runLoops.
+  invokeCheckWindowLocation: function(after) {
+    var f = this.__checkWindowLocation, that = this;
+    if (!f) {
+      f = this.__checkWindowLocation = function() {
+        that._checkWindowLocation();
+      };
+    }
+    setTimeout(f, after);
+  },
+  
   /** @private
     _checkWindowLocation and _setWindowLocation are implemented separately for
     each browser.  Below are the implementations, which get copied during init.
@@ -215,7 +228,7 @@ SC.routes = SC.Object.create(
         // create forward stack.
         this._forwardStack = [] ;
         
-        this.invokeLater(this._checkWindowLocation, 1000) ;
+        this.invokeCheckWindowLocation(1000) ;
       },
       
       _checkWindowLocation: function() { 
@@ -225,7 +238,7 @@ SC.routes = SC.Object.create(
         // takes a little while for Safari to catch up.  So what we do instead 
         // is first check to see if Safari's length has changed from its last 
         // known length and only then check for a delta.
-        var historyDidChange = (history.length - this._lastLength) != 0;
+        var historyDidChange = (history.length - this._lastLength) !== 0;
         var delta = (historyDidChange) ? (history.length - this._backStack.length) : 0 ;
         this._lastLength = history.length ;
         
@@ -253,7 +266,7 @@ SC.routes = SC.Object.create(
             // shift out the current loc.
             this._backStack.push(this._cloc) ;
             
-            for(var i=0; i < (delta-1); i++) {
+            for(i=0; i < (delta-1); i++) {
               this._backStack.push(this._forwardStack.pop()) ;
             }
             
@@ -277,7 +290,7 @@ SC.routes = SC.Object.create(
           this.gotoRoute(cloc) ;
         }
         
-        this.invokeLater(this._checkWindowLocation, 50) ;
+        this.invokeCheckWindowLocation(50) ;
       },
       
       _setWindowLocation: function(loc) {
@@ -296,7 +309,7 @@ SC.routes = SC.Object.create(
     // for IE.
     ie: {
       _setupHistory: function() {
-        this.invokeLater(this._checkWindowLocation, 1000) ;
+        this.invokeCheckWindowLocation(1000) ;
       },
       
       _checkWindowLocation: function() {
@@ -304,7 +317,7 @@ SC.routes = SC.Object.create(
         var cloc = location.hash ;
         cloc = (cloc && cloc.length > 0) ? cloc.slice(1,cloc.length) : '' ;
         if (cloc != loc) this.set('location',(cloc) ? cloc : '') ;
-        this.invokeLater(this._checkWindowLocation, 100) ;
+        this.invokeCheckWindowLocation(100) ;
       },
       
       _setWindowLocation: function(loc) {
@@ -322,7 +335,7 @@ SC.routes = SC.Object.create(
   /** @private */
   _setupHistory: function() {
     var that = this ;
-    this._checkWindowLocation.invokeLater(this, 1000) ;
+    this.invokeCheckWindowLocation(1000) ;
   },
   
   /** @private */
@@ -335,7 +348,8 @@ SC.routes = SC.Object.create(
       this.set('location',(cloc) ? cloc : '') ;
       SC.RunLoop.end();
     }
-    // this.invokeLater(this._checkWindowLocation, 100) ;
+    
+    this.invokeCheckWindowLocation(150) ;
   },
   
   /** @private */
@@ -372,7 +386,7 @@ SC.routes = SC.Object.create(
     
     addRoute: function(parts, target, method) {
       
-      if (!parts || parts.length == 0) {
+      if (!parts || parts.length === 0) {
         this._target = target;
         this._method = method;
         
@@ -401,7 +415,7 @@ SC.routes = SC.Object.create(
             
           // setup a normal static route.
           default:
-            var routes = this._static[part] || [] ;
+            routes = this._static[part] || [] ;
             nextRoute = SC.routes._Route.create() ;
             routes.push(nextRoute) ;
             this._static[part] = routes ;
@@ -416,36 +430,45 @@ SC.routes = SC.Object.create(
     functionForRoute: function(parts, params) {
       
       // if parts it empty, then we are here, so return func
-      if (!parts || parts.length == 0) {
+      if (!parts || parts.length === 0) {
         return this ;        
         
       // process the next part
       } else {
-        var part = parts.shift() ;
-        var routes, nextRoute, ret, loc ;
+        var part = parts.shift(),
+            ret  = null,
+           routes, nextRoute, loc ;
         
         // try to match to static
         routes = this._static[part] ;
-        if (routes) for(loc=0;(loc < routes.length) && (ret==null);loc++) {
-          var clone = parts.slice() ;
-          ret = routes[loc].functionForRoute(clone, params) ;
+        if (routes) {
+          for(loc=0;(loc < routes.length) && (ret===null);loc++) {
+            var clone = parts.slice() ;
+            ret = routes[loc].functionForRoute(clone, params) ;
+          }
         }
         
         // try to match dynamic if no static match was found.
-        if (ret == null) for(var key in this._dynamic) {
-          routes = this._dynamic[key] ;
-          if (routes) for(loc=0;(loc<routes.length) && (ret == null);loc++) {
-            var clone = parts.slice() ;
-            ret = routes[loc].functionForRoute(clone,params) ;
+        if (ret === null) {
+          for(var key in this._dynamic) {
+            routes = this._dynamic[key] ;
+            if (routes) {
+              for(loc=0;(loc<routes.length) && (ret === null);loc++) {
+                clone = parts.slice() ;
+                ret = routes[loc].functionForRoute(clone,params) ;
             
-            // if a route was found, save the current part in params.
-            if (ret && params) params[key] = part ;
+                // if a route was found, save the current part in params.
+                if (ret && params) params[key] = part ;
+              }
+            }
+
+            if (ret) break ; 
           }
-          if (ret) break ; 
         }
         
+        
         // if nothing still found, and there is a wildcard, match that.
-        if ((ret == null) && this._wildcard) {
+        if ((ret === null) && this._wildcard) {
           parts.unshift(part) ;
           if (params) params[this._wildcard] = parts.join('/') ;
           ret = this;

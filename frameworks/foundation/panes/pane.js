@@ -75,6 +75,7 @@ require('views/view');
   that should not steal keyboard control from another view.
 
   @extends SC.View
+  @extends SC.ResponderContext
   @since SproutCore 1.0
 */
 SC.Pane = SC.View.extend({
@@ -157,7 +158,14 @@ SC.Pane = SC.View.extend({
     
     // if no handler was found in the responder chain, try the default
     if (!target && (target = this.get('defaultResponder'))) {
-      target = target.tryToPerform(action, evt) ? target : null ;
+      if (typeof target === SC.T_STRING) {
+        target = SC.objectForPropertyPath(target);
+      }
+
+      if (!target) target = null;
+      else if (target.isResponderContext) {
+        target = target.sendAction(action, this, evt);
+      } else target = target.tryToPerform(action, evt) ? target : null ;
     }
         
     return evt.mouseHandler || target ;
@@ -174,11 +182,11 @@ SC.Pane = SC.View.extend({
   defaultResponder: null,
   
   /** @property
-    The next responder for the pane is always its defaultResponder.
+    Pane's never have a next responder
   */
   nextResponder: function() {
-    return this.get('defaultResponder');
-  }.property('defaultResponder').cacheable(),
+    return null;
+  }.property().cacheable(),
   
   /** @property
     The first responder.  This is the first view that should receive action 
@@ -236,7 +244,7 @@ SC.Pane = SC.View.extend({
     if (current === view) return this ; // nothing to do
     
     // notify current of firstResponder change
-    if (current) current.willLoseFirstResponder();
+    if (current) current.willLoseFirstResponder(current);
     
     // if we are currently key pane, then notify key views of change also
     if (isKeyPane) {
@@ -265,7 +273,7 @@ SC.Pane = SC.View.extend({
       if (current) current.didLoseKeyResponderTo(view) ;
     }
     
-    if (view) view.didBecomeFirstResponder();
+    if (view) view.didBecomeFirstResponder(view);
     return this ;
   },
   
@@ -350,6 +358,20 @@ SC.Pane = SC.View.extend({
   isMainPane: NO,
   
   /**
+    Invoked when the pane is about to become the focused pane.
+    
+    @param {SC.Pane} pane the pane that currently have focus
+  */
+  focusFrom: function(pane) {},
+  
+  /**
+    Invoked when the the pane is about to lose its focused pane status.
+    
+    @param {SC.Pane} pane the pane that will receive focus next
+  */
+  blurTo: function(pane) {},
+  
+  /**
     Invoked when the view is about to lose its mainPane status.  The default 
     implementation will also remove the pane from the document since you can't 
     have more than one mainPane in the document at a time.
@@ -407,6 +429,7 @@ SC.Pane = SC.View.extend({
     // clean up some of my own properties 
     this.set('isPaneAttached', NO) ;
     this.parentViewDidChange() ;
+    return this ;
   },
   
   /**

@@ -1036,6 +1036,20 @@ SC.IndexSet = SC.mixin({},
   },
 
   /**
+    Adds any indexes matching the passed objects.  If firstOnly is passed, 
+    then only finds the first index for each object.
+    
+    @param {SC.Enumerable} objects the objects to add
+    @returns {SC.IndexSet} receiver
+  */
+  addObjects: function(objects, firstOnly) {
+    objects.forEach(function(object) {
+      this.addObject(object, firstOnly);
+    }, this);
+    return this;
+  },
+  
+  /**
     Removes all indexes where the object appears to the set.  If firstOnly is 
     passed, then it will find only the first index and add it.  If  you know
     the object only appears in the source array one time, firstOnly may make
@@ -1058,11 +1072,26 @@ SC.IndexSet = SC.mixin({},
       if (idx >= 0) { 
         this.remove(idx);
         if (firstOnly) return this ;
-        cur = idx++;
+        cur = idx+1;
       } else return this ;
     }
     return this ;    
   },
+
+  /**
+    Removes any indexes matching the passed objects.  If firstOnly is passed, 
+    then only finds the first index for each object.
+    
+    @param {SC.Enumerable} objects the objects to add
+    @returns {SC.IndexSet} receiver
+  */
+  removeObjects: function(objects, firstOnly) {
+    objects.forEach(function(object) {
+      this.removeObject(object, firstOnly);
+    }, this);
+    return this;
+  },
+  
   
   // .......................................
   // PRIVATE 

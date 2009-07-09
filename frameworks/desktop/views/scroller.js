@@ -121,14 +121,12 @@ SC.ScrollerView = SC.View.extend({
       case SC.LAYOUT_VERTICAL:
         // if (firstTime) context.addClass('sc-vertical') ;
         context.addClass('sc-vertical') ;
-        context.push('<div class="sc-inner" style="height: %@px;">\
-          </div>'.fmt(size)) ;
+        context.push('<div class="sc-inner" style="height: %@px;">&nbsp;</div>'.fmt(size)) ;
         break ;
       case SC.LAYOUT_HORIZONTAL:
         // if (firstTime) context.addClass('sc-horizontal') ;
         context.addClass('sc-horizontal') ;
-        context.push('<div class="sc-inner" style="width: %@px;">\
-          </div>'.fmt(size)) ;
+        context.push('<div class="sc-inner" style="width: %@px;">&nbsp;</div>'.fmt(size)) ;
         break ;
       default:
         throw "You must set a layoutDirection for your scroller class." ;

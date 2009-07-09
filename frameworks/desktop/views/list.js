@@ -188,6 +188,11 @@ SC.ListView = SC.CollectionView.extend(
         ret, custom, cache, delta, max, content ;
         
     ret = idx * rowHeight;
+
+		if(this.get('rowSpacing')){ 
+      ret += idx * this.get('rowSpacing'); 
+    } 
+
     if (del.customRowHeightIndexes && (custom=del.get('customRowHeightIndexes'))) {
       
       // prefill the cache with custom rows.
@@ -313,14 +318,14 @@ SC.ListView = SC.CollectionView.extend(
     
     The default simply returns the current content length.
     
-    @param {Rect} rect the visible rect
+    @param {Rect} rect the visible rect or a point
     @returns {SC.IndexSet} now showing indexes
   */
   contentIndexesInRect: function(rect) {
     var rowHeight = this.get('rowDelegate').get('rowHeight'),
         top       = SC.minY(rect),
         bottom    = SC.maxY(rect),
-        height    = rect.height,
+        height    = rect.height || 0,
         len       = this.get('length'),
         offset, start, end;
     
@@ -373,7 +378,158 @@ SC.ListView = SC.CollectionView.extend(
   },
   
   // ..........................................................
-  // INTENRAL SUPPORT
+  // DRAG AND ROP SUPPORT
+  // 
+  
+  
+  /**
+    Default view class used to draw an insertion point.  The default 
+    view will show a vertical line.  Any view you create
+    should expect an outlineLevel property set, which should impact your left
+    offset.
+    
+    @property 
+    @type {SC.View}
+  */
+  insertionPointView: SC.View.extend({
+    classNames: 'sc-list-insertion-point',
+    
+    render: function(context, firstTime) {
+      if (firstTime) context.push('<div class="anchor"></div>');
+    }
+    
+  }),
+
+  /**
+    Default implementation will show an insertion point
+  */
+  showInsertionPoint: function(itemView, dropOperation) {
+    var view = this._insertionPointView;
+    if (!view) {
+      view = this._insertionPointView 
+           = this.get('insertionPointView').create();
+    }
+    
+    var layout = SC.clone(itemView.get('layout')),
+        level  = itemView.get('outlineLevel'),
+        indent = itemView.get('outlineIndent') || 0;
+    if (SC.none(level)) level = -1;
+    
+    if (dropOperation & SC.DROP_ON) {
+      this.hideInsertionPoint();
+      itemView.set('isSelected', YES);
+      this._lastDropOnView = itemView;
+    } else {
+
+      if (this._lastDropOnView) {
+        this._lastDropOnView.set('isSelected', NO);
+        this._lastDropOnView = null;
+      }
+      
+      if (dropOperation & SC.DROP_AFTER) layout.top += layout.height;
+      
+      layout.height = 2;
+      layout.right  = 0;
+      layout.left   = ((level+1) * indent) + 12;
+      delete layout.width;
+
+      view.set('layout', layout);
+      this.appendChild(view);
+    }
+  },
+  
+  hideInsertionPoint: function() {
+    if (this._lastDropOnView) {
+      this._lastDropOnView.set('isSelected', NO);
+      this._lastDropOnView = null;
+    }
+    
+    var view = this._insertionPointView;
+    if (view) view.removeFromParent().destroy();
+    this._insertionPointView = null;
+  },
+
+  /**
+    Compute the insertion index for the passed location.  The location is 
+    a point, relative to the top/left corner of the receiver view.  The return
+    value is an index plus a dropOperation, which is computed as such:
+    
+    - if outlining is not used and you are within 5px of an edge, DROP_BEFORE
+      the item after the edge.
+      
+    - if outlining is used and you are within 5px of an edge and the previous
+      item has a different outline level then the next item, then DROP_AFTER
+      the previous item if you are closer to that outline level.
+      
+    - if dropOperation = SC.DROP_ON and you are over the middle of a row, then
+      use DROP_ON.
+  */
+  insertionIndexForLocation: function(loc, dropOperation) { 
+    var indexes = this.contentIndexesInRect(loc),
+        index   = indexes.get('min'),
+        len     = this.get('length'),
+        min, max, diff, clevel, cindent, plevel, pindent, itemView;
+
+    // if there are no indexes in the rect, then we need to either insert
+    // before the top item or after the last item.  Figure that out by 
+    // computing both.
+    if (SC.none(index) || index<0) {
+      if ((len===0) || (loc.y <= this.rowOffsetForContentIndex(0))) index = 0;
+      else if (loc.y >= this.rowOffsetForContentIndex(len)) index = len;
+    }
+
+    // figure the range of the row the location must be within.
+    min = this.rowOffsetForContentIndex(index);
+    max = min + this.rowHeightForContentIndex(index);
+    
+    dropOperation = SC.DROP_BEFORE;
+    
+    // now we know which index we are in.  if dropOperation is DROP_ON, figure
+    // if we can drop on or not.
+    if (dropOperation == SC.DROP_ON) {
+      // editable size - reduce height by a bit to handle dropping
+      if (this.get('isEditable')) diff=Math.min(Math.floor((max-min)*0.2),5);
+      else diff = 0;
+      
+      // if we're inside the range, then DROP_ON
+      if (loc.y >= (min+diff) || loc.y <= (max+diff)) {
+        return [index, SC.DROP_ON];
+      }
+    }
+    
+    // ok, now if we are in last 10px, go to next item.
+    if ((index<len) && (loc.y >= max-10)) index++;
+    
+    // finally, let's decide if we want to actually insert before/after.  Only
+    // matters if we are using outlining.
+    if (index>0) {
+      itemView = this.itemViewForContentIndex(index);
+      clevel   = itemView ? itemView.get('outlineLevel') : 0;
+      cindent  = (itemView ? itemView.get('outlineIndent') : 0) || 0;
+      cindent  *= clevel;
+      
+      itemView = this.itemViewForContentIndex(index);
+      pindent  = (itemView ? itemView.get('outlineIndent') : 0) || 0;
+      plevel   = itemView ? itemView.get('outlineLevel') : 0;
+      pindent  *= plevel;
+
+      // if indent levels are different, then try to figure out which level 
+      // it should be on.
+      if ((clevel !== plevel) && (cindent !== pindent)) {
+        // use most inner indent as boundary
+        if (((pindent > cindent) && (loc.x >= pindent)) ||
+            ((pindent < cindent) && (loc.x <= cindent))) {
+          index-- ;
+          dropOperation = SC.DROP_AFTER;
+        }
+      }
+    }
+
+    return [index, dropOperation];
+  },
+  
+  // ..........................................................
+  // INTERNAL SUPPORT
   // 
 
   init: function() {
